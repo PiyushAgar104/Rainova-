@@ -54,7 +54,5 @@ It translates complex meteorological signals into simple human-readable outcomes
 - Weather APIs
 - FastAPI (backend)
 - Basic web UI (HTML/CSS/JS or React)
-
+-AI Intregration
 ---
-
-## 📁 Project Structure
