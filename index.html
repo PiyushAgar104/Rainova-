@@ -1,0 +1,1849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rainova — Premium Weather Intelligence</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js for premium Apple-like charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            /* Palette */
+            --sky-blue: #5BB6F9;
+            --cloud-white: #FAFCFE;
+            --forest-green: #3AA76D;
+            --deep-navy: #20344D;
+            --rain-gray: #DCE5EC;
+            --sunset-orange: #FFB74D;
+            
+            --glass-bg: rgba(250, 252, 254, 0.04);
+            --glass-border: rgba(250, 252, 254, 0.08);
+            --glass-border-hover: rgba(250, 252, 254, 0.15);
+            --glass-accent: rgba(250, 252, 254, 0.08);
+            
+            --text-primary: #FAFCFE;
+            --text-secondary: #DCE5EC;
+            --text-muted: #94a3b8;
+            
+            --transition-slow: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-fast: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            
+            /* Sky Gradients */
+            --sky-sunny: linear-gradient(180deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%);
+            --sky-cloudy: linear-gradient(180deg, #1e293b 0%, #475569 50%, #64748b 100%);
+            --sky-rain: linear-gradient(180deg, #0f172a 0%, #1e293b 60%, #334155 100%);
+            --sky-storm: linear-gradient(180deg, #020617 0%, #0f172a 60%, #1e293b 100%);
+            --sky-evening: linear-gradient(180deg, #311042 0%, #6b21a8 40%, #db2777 75%, #f43f5e 100%);
+            --sky-night: linear-gradient(180deg, #030712 0%, #0b1528 50%, #111827 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            color: var(--text-primary);
+            background: url('/static/images/hero-rain.png') no-repeat center center fixed;
+            background-size: cover;
+            position: relative;
+            scroll-behavior: smooth;
+        }
+
+        #bgAtmosphere {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: var(--sky-night);
+            opacity: 0.65;
+            transition: background 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+
+        /* Canvas Layers */
+        #particleCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        #globeCanvas {
+            position: fixed;
+            z-index: 2;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            left: 75%;
+            top: 50%;
+            width: 550px;
+            height: auto;
+            aspect-ratio: 3/2;
+            border-radius: 2.5rem;
+            border: 1px solid var(--glass-border);
+            filter: drop-shadow(0 20px 50px rgba(0, 0, 0, 0.75));
+            transition: var(--transition-slow);
+            object-fit: cover;
+        }
+
+        #globeCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* Glassmorphism panel styling */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: 2rem;
+            transition: var(--transition-fast);
+            box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-panel:hover {
+            border-color: var(--glass-border-hover);
+            box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Floating widgets (anti-gravity) */
+        .floating-widgets-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 3;
+            transition: var(--transition-slow);
+        }
+
+        .float-widget {
+            position: absolute;
+            pointer-events: auto;
+            padding: 0.85rem 1.35rem;
+            background: rgba(250, 252, 254, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: var(--transition-slow);
+            animation: drift 6s ease-in-out infinite alternate;
+        }
+
+        .float-widget i {
+            color: var(--sky-blue);
+        }
+
+        @keyframes drift {
+            0% { transform: translateY(0px) rotate(0deg); }
+            100% { transform: translateY(-15px) rotate(1.5deg); }
+        }
+
+        /* Float positions on page */
+        .fw-1 { top: 12%; left: 55%; animation-duration: 5s; }
+        .fw-2 { top: 28%; left: 88%; animation-duration: 7s; animation-delay: 0.5s; }
+        .fw-3 { bottom: 20%; left: 58%; animation-duration: 6s; animation-delay: 1s; }
+        .fw-4 { bottom: 12%; left: 85%; animation-duration: 8s; animation-delay: 1.5s; }
+        .fw-5 { top: 5%; left: 72%; animation-duration: 7.5s; animation-delay: 2s; }
+
+        /* Scroll Layout structure */
+        .scroll-wrapper {
+            position: relative;
+            z-index: 4;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        /* Scroll sections represent frames of a continuous product film */
+        .scroll-section {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            padding: 4rem 0;
+            opacity: 0;
+            transform: translateY(60px);
+            transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), transform 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Section Reveal State */
+        .scroll-section.active-frame {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Fixed Navigation header */
+        .nav-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 100;
+            padding: 1.5rem 3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(3, 7, 18, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .logo i {
+            font-size: 1.75rem;
+            color: var(--sky-blue);
+        }
+
+        .logo span {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+
+        .ai-badge {
+            background: rgba(91, 182, 249, 0.15);
+            color: var(--sky-blue);
+            padding: 0.45rem 0.95rem;
+            border-radius: 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid rgba(91, 182, 249, 0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        /* --- SECTION 1: HERO --- */
+        #hero-frame {
+            padding-top: 8rem;
+        }
+
+        .hero-layout {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .hero-left-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2.25rem;
+        }
+
+        .hero-title h1 {
+            font-size: 4rem;
+            font-weight: 900;
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+            margin-bottom: 1rem;
+        }
+
+        .hero-title p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            font-weight: 350;
+            line-height: 1.5;
+            max-width: 540px;
+        }
+
+        /* Input Controls */
+        .location-search-box {
+            display: flex;
+            gap: 0.75rem;
+            position: relative;
+        }
+
+        .location-search-box input {
+            flex: 1;
+            background: rgba(15, 23, 42, 0.45);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.35rem;
+            padding: 1.2rem 1.25rem 1.2rem 3.5rem;
+            color: var(--text-primary);
+            font-size: 1.05rem;
+            outline: none;
+            transition: var(--transition-fast);
+        }
+
+        .location-search-box input:focus {
+            border-color: var(--sky-blue);
+            background: rgba(15, 23, 42, 0.6);
+            box-shadow: 0 0 20px rgba(91, 182, 249, 0.2);
+        }
+
+        .location-search-box i.search-icon {
+            position: absolute;
+            left: 1.35rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        .btn {
+            border: none;
+            outline: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.05rem;
+            transition: var(--transition-fast);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.65rem;
+            border-radius: 1.35rem;
+        }
+
+        .btn-predict {
+            background: var(--text-primary);
+            color: var(--deep-navy);
+            padding: 1.1rem 2.25rem;
+        }
+
+        .btn-predict:hover {
+            background: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.25);
+        }
+
+        .btn-locate {
+            background: var(--glass-accent);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            width: 58px;
+            height: 58px;
+            aspect-ratio: 1;
+        }
+
+        .btn-locate:hover {
+            background: rgba(250, 252, 254, 0.15);
+            border-color: var(--sky-blue);
+            color: var(--sky-blue);
+        }
+
+        /* Glass Weather Panel */
+        .glass-weather-card {
+            padding: 2.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+            overflow: hidden;
+            max-width: 580px;
+        }
+
+        .weather-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .weather-card-location h2 {
+            font-size: 1.85rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.25rem;
+        }
+
+        .weather-card-location p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .weather-card-body {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .weather-main-temp {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+
+        .weather-temp-num {
+            font-size: 5.5rem;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: -0.04em;
+        }
+
+        .weather-temp-deg {
+            font-size: 2.25rem;
+            font-weight: 500;
+            color: var(--sky-blue);
+            margin-top: 0.5rem;
+        }
+
+        .weather-desc-block {
+            text-align: right;
+        }
+
+        .weather-desc-block i {
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--sky-blue);
+            transition: var(--transition-slow);
+        }
+
+        .weather-condition {
+            font-size: 1.35rem;
+            font-weight: 700;
+        }
+
+        .weather-feels-like {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Generic Section header */
+        .section-header {
+            margin-bottom: 2.5rem;
+        }
+
+        .section-tag {
+            font-size: 0.85rem;
+            font-weight: 650;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--sky-blue);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.03em;
+        }
+
+        /* --- SECTION 2: LIVE WEATHER INTELLIGENCE --- */
+        .live-weather-layout {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .live-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.25rem;
+        }
+
+        .live-widget {
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .widget-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .widget-header i {
+            color: var(--sky-blue);
+            font-size: 0.9rem;
+        }
+
+        .widget-value {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .widget-subtext {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* --- SECTION 3: AI PREDICTION TIMELINE --- */
+        .timeline-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .timeline-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1.25rem;
+        }
+
+        .timeline-card {
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 1.5rem;
+        }
+
+        .timeline-time {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .timeline-card i {
+            font-size: 2.25rem;
+            color: var(--sky-blue);
+            transition: var(--transition-slow);
+        }
+
+        .timeline-temp {
+            font-size: 1.75rem;
+            font-weight: 800;
+        }
+
+        .timeline-prob {
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 0.4rem 0.85rem;
+            border-radius: 0.75rem;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .prob-high { color: var(--sky-blue); border-color: rgba(91, 182, 249, 0.3); background: rgba(91, 182, 249, 0.06); }
+        .prob-low { color: var(--forest-green); border-color: rgba(58, 167, 109, 0.3); background: rgba(58, 167, 109, 0.06); }
+
+        /* --- SECTION 4: SATELLITE INTELLIGENCE LAYER --- */
+        .satellite-layout {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .radar-box {
+            position: relative;
+            border-radius: 2rem;
+            overflow: hidden;
+            height: 480px;
+            box-shadow: 0 10px 45px -15px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--glass-border);
+        }
+
+        #radarCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0b111e;
+        }
+
+        .radar-panel-overlay {
+            position: absolute;
+            bottom: 1.5rem;
+            left: 1.5rem;
+            right: 1.5rem;
+            z-index: 10;
+            padding: 1rem 1.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .radar-slider-container {
+            flex: 1;
+            margin: 0 1.5rem;
+            background: rgba(255, 255, 255, 0.15);
+            height: 6px;
+            border-radius: 6px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .radar-slider-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--sky-blue);
+            position: absolute;
+            top: 50%;
+            left: 0%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 12px var(--sky-blue);
+            transition: left 0.1s linear;
+        }
+
+        .radar-play-btn {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 1.1rem;
+            outline: none;
+        }
+
+        /* --- SECTION 5: DATA + ANALYTICS --- */
+        .analytics-layout {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .analytics-chart-card {
+            padding: 2.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            height: 420px;
+        }
+
+        .chart-viewport {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- SECTION 6: SMART ALERTS & NOTIFICATIONS --- */
+        .alerts-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .alerts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        .alert-card-item {
+            padding: 1.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 1.25rem;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            transition: var(--transition-fast);
+        }
+
+        .alert-card-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .alert-card-item i {
+            font-size: 1.35rem;
+            padding: 0.85rem;
+            border-radius: 1rem;
+        }
+
+        .alert-card-item.danger i {
+            color: var(--sunset-orange);
+            background: rgba(255, 183, 77, 0.1);
+        }
+
+        .alert-card-item.nature i {
+            color: var(--forest-green);
+            background: rgba(58, 167, 109, 0.1);
+        }
+
+        .alert-card-item.info i {
+            color: var(--sky-blue);
+            background: rgba(91, 182, 249, 0.1);
+        }
+
+        .alert-card-body h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+        }
+
+        .alert-card-body p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* --- SECTION 7: AI INSIGHTS --- */
+        .insights-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        .large-insights-container {
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .insight-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            line-height: 1.5;
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+        }
+
+        .insight-row i {
+            margin-top: 0.25rem;
+            font-size: 1.2rem;
+            color: var(--sky-blue);
+        }
+
+        /* --- SECTION 8: FUTURE WEATHER VISION / FOOTER --- */
+        #vision-frame {
+            min-height: 80vh;
+            justify-content: flex-end;
+            gap: 4rem;
+        }
+
+        .vision-text-block {
+            text-align: center;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+
+        .vision-text-block h2 {
+            font-size: 3rem;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #ffffff 40%, var(--sky-blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .vision-text-block p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        footer {
+            border-top: 1px solid var(--glass-border);
+            padding: 3rem 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2.5rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            text-decoration: none;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: var(--transition-fast);
+        }
+
+        .footer-links a:hover {
+            color: var(--sky-blue);
+        }
+
+        .footer-copyright {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Global Loader Overlay */
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(91, 182, 249, 0.15);
+            border-top-color: var(--sky-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Layout Rules */
+        @media (max-width: 1024px) {
+            .hero-layout, .live-weather-layout, .satellite-layout, .analytics-layout, .insights-layout {
+                grid-template-columns: 1fr;
+            }
+            #globeCanvas {
+                position: relative;
+                left: 50%;
+                top: auto;
+                margin-top: 2rem;
+                transform: translateX(-50%);
+            }
+            .floating-widgets-container {
+                display: none; /* Hide floating widgets on mobile/tablet to avoid clutter */
+            }
+            .timeline-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .alerts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="bgAtmosphere"></div>
+
+    <!-- Canvas layers -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- Global Loader -->
+    <div class="loader-overlay" id="loader">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="nav-header">
+        <a href="#" class="logo">
+            <i class="fa-solid fa-umbrella"></i>
+            <span>Rainova</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="ai-badge" style="background: rgba(91, 182, 249, 0.1); color: var(--sky-blue); border-color: rgba(91, 182, 249, 0.2);">
+                Made by Piyush Agar
+            </div>
+            <div class="ai-badge">
+                <i class="fa-solid fa-brain"></i> AI Weather Intelligence
+            </div>
+        </div>
+    </header>
+
+    <!-- Globe Canvas: Fixed background and dynamically positioned based on scroll section -->
+    <!-- Atmospheric Intelligence Engine Image -->
+    <img id="globeCanvas" src="/static/images/atmospheric-engine.jpg" alt="Atmospheric Intelligence Engine">
+
+    <!-- Floating Widgets layer (Anti-gravity) -->
+    <div class="floating-widgets-container" id="floatingWidgets">
+        <div class="float-widget fw-1"><i class="fa-solid fa-location-arrow"></i> Nagpur</div>
+        <div class="float-widget fw-2"><i class="fa-solid fa-cloud-rain"></i> Rain Chance: <span id="fwProb">78%</span></div>
+        <div class="float-widget fw-3"><i class="fa-solid fa-temperature-half"></i> Temp: <span id="fwTemp">32°C</span></div>
+        <div class="float-widget fw-4"><i class="fa-solid fa-wind"></i> Wind: <span id="fwWind">12 km/h</span></div>
+        <div class="float-widget fw-5"><i class="fa-solid fa-satellite"></i> Satellite Uplink Live</div>
+    </div>
+
+    <div class="scroll-wrapper">
+
+        <!-- SECTION 1: HERO (First impression) -->
+        <section class="scroll-section" id="hero-frame">
+            <div class="hero-layout">
+                <div class="hero-left-content">
+                    <div class="hero-title">
+                        <h1>Will it rain where you are?</h1>
+                        <p>Experience Rainova. An intelligent nature-tech weather system predicting rain via advanced Random Forest machine learning models.</p>
+                    </div>
+
+                    <!-- Search Input Box -->
+                    <div class="location-search-box">
+                        <i class="fa-solid fa-location-dot search-icon"></i>
+                        <input type="text" id="locationInput" placeholder="Enter city name (e.g. Nagpur, London, Sydney)...">
+                        <button class="btn btn-locate" id="locateBtn" title="Detect Location">
+                            <i class="fa-solid fa-crosshairs"></i>
+                        </button>
+                        <button class="btn btn-predict" id="predictBtn">
+                            Predict Rain <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- Live Landscape Sync Frame -->
+                    <div class="glass-panel" id="landscapeFrame" style="overflow: hidden; border-radius: 1.75rem; height: 180px; position: relative;">
+                        <img src="/static/images/hero-rain.png" alt="Live Landscape Sync" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.85; transition: filter 1.5s ease;">
+                        <div style="position: absolute; bottom: 0; left: 0; width: 100%; padding: 0.75rem 1.25rem; background: linear-gradient(0deg, rgba(3, 7, 18, 0.85) 0%, rgba(3, 7, 18, 0) 100%); font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary);">
+                            <i class="fa-solid fa-camera"></i> Live Landscape Sync — <span id="landscapeLabel">Rainy View</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Weather Card -->
+                    <div class="glass-panel glass-weather-card">
+                        <div class="weather-card-header">
+                            <div class="weather-card-location">
+                                <h2 id="locationName">Nagpur, India</h2>
+                                <p><i class="fa-solid fa-location-crosshairs"></i> <span id="coordinatesText">Lat: 21.1458, Lon: 79.0882</span></p>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 0.75rem; margin-top: 0.35rem; font-weight: 500;">
+                                    <span id="elevationText"><i class="fa-solid fa-mountain"></i> Elev: 310m</span> 
+                                    <span id="timezoneText"><i class="fa-solid fa-earth-americas"></i> Zone: Asia/Kolkata</span>
+                                </p>
+                            </div>
+                            <div class="ai-badge" style="background: rgba(58, 167, 109, 0.15); color: var(--forest-green); border-color: rgba(58, 167, 109, 0.2);" id="confidenceBadge">
+                                <i class="fa-solid fa-circle-check"></i> AI Confidence: 94.5%
+                            </div>
+                        </div>
+
+                        <div class="weather-card-body">
+                            <div class="weather-main-temp">
+                                <span class="weather-temp-num" id="currentTemp">32</span>
+                                <span class="weather-temp-deg">°C</span>
+                            </div>
+
+                            <!-- Big Rain Prediction Percentage -->
+                            <div style="text-align: center; border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border); padding: 0 1.5rem; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.15rem;">
+                                <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500;">Rain Chance</span>
+                                <span style="font-size: 3.5rem; font-weight: 900; color: var(--sky-blue); line-height: 1; letter-spacing: -0.04em;" id="largeRainProb">78%</span>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em;" id="largeRainPred">Rain Expected</span>
+                            </div>
+
+                            <div class="weather-desc-block">
+                                <i class="fa-solid fa-cloud-sun" id="currentIcon"></i>
+                                <div class="weather-condition" id="currentCondition">Partly Cloudy</div>
+                                <div class="weather-feels-like">Feels like <span id="feelsLike">36</span>°C</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: LIVE WEATHER INTELLIGENCE -->
+        <section class="scroll-section" id="live-frame">
+            <div class="live-weather-layout">
+                <div class="live-left-content">
+                    <div class="section-header">
+                        <div class="section-tag"><i class="fa-solid fa-chart-simple"></i> Atmospheric Stats</div>
+                        <h2 class="section-title">Live Weather Intelligence</h2>
+                    </div>
+                    
+                    <div class="live-grid">
+                        <div class="glass-panel live-widget">
+                            <div class="widget-header"><i class="fa-solid fa-droplet"></i> Humidity</div>
+                            <div class="widget-value" id="humidity">75%</div>
+                            <div class="widget-subtext">Relative moisture levels</div>
+                        </div>
+                        <div class="glass-panel live-widget">
+                            <div class="widget-header"><i class="fa-solid fa-wind"></i> Wind Speed</div>
+                            <div class="widget-value" id="windSpeed">12 km/h</div>
+                            <div class="widget-subtext">Horizontal air speed</div>
+                        </div>
+                        <div class="glass-panel live-widget">
+                            <div class="widget-header"><i class="fa-solid fa-gauge"></i> Pressure</div>
+                            <div class="widget-value" id="pressure">1008 hPa</div>
+                            <div class="widget-subtext">Surface barometric reading</div>
+                        </div>
+                        <div class="glass-panel live-widget">
+                            <div class="widget-header"><i class="fa-solid fa-sun"></i> UV Index</div>
+                            <div class="widget-value" id="uvIndex">5 / 10</div>
+                            <div class="widget-subtext">Solar radiation intensity</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: AI PREDICTION TIMELINE -->
+        <section class="scroll-section" id="timeline-frame">
+            <div class="timeline-wrapper">
+                <div class="section-header">
+                    <div class="section-tag"><i class="fa-solid fa-clock"></i> Predictive Timeline</div>
+                    <h2 class="section-title">AI Rain Timeline</h2>
+                </div>
+
+                <div class="timeline-grid" id="timelineContainer">
+                    <!-- Timeline cards injected via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: SATELLITE INTELLIGENCE LAYER -->
+        <section class="scroll-section" id="satellite-frame">
+            <div class="satellite-layout">
+                <div class="radar-box">
+                    <canvas id="radarCanvas"></canvas>
+                    <div class="radar-panel-overlay">
+                        <button class="radar-play-btn" id="radarPlayBtn"><i class="fa-solid fa-play"></i></button>
+                        <span>Interactive Radar Loop</span>
+                        <div class="radar-slider-container" id="radarSlider">
+                            <div class="radar-slider-thumb" id="radarHandle"></div>
+                        </div>
+                        <span id="radarTimeLabel">Live</span>
+                    </div>
+                </div>
+
+                <div class="satellite-content">
+                    <div class="section-header">
+                        <div class="section-tag"><i class="fa-solid fa-satellite"></i> Satellite Grid</div>
+                        <h2 class="section-title">Satellite Intelligence</h2>
+                    </div>
+                    <p style="font-size: 1.1rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 2rem;">
+                        Real-time tracking of regional cloud formations, moisture indexes, and rainfall vectors compiled directly from geo-stationary meteorological satellites.
+                    </p>
+                    <div class="glass-panel" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                            <span>Orbital Uplink Status</span>
+                            <span style="color: var(--forest-green); font-weight: 600;">CONNECTED</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                            <span>Precipitation Echo</span>
+                            <span id="precipEcho">Slight</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: DATA + ANALYTICS DASHBOARD -->
+        <section class="scroll-section" id="analytics-frame">
+            <div class="section-header">
+                <div class="section-tag"><i class="fa-solid fa-chart-line"></i> Meteorological Trends</div>
+                <h2 class="section-title">Precipitation Analytics</h2>
+            </div>
+            
+            <div class="analytics-layout">
+                <div class="glass-panel analytics-chart-card">
+                    <h3>Monthly Precipitation (mm)</h3>
+                    <div class="chart-viewport">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-panel analytics-chart-card">
+                    <h3>Annual Historical Trends (mm)</h3>
+                    <div class="chart-viewport">
+                        <canvas id="yearlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6: SMART ALERTS & NOTIFICATIONS -->
+        <section class="scroll-section" id="alerts-frame">
+            <div class="alerts-wrapper">
+                <div class="section-header">
+                    <div class="section-tag"><i class="fa-solid fa-bell"></i> Alerts & Warnings</div>
+                    <h2 class="section-title">Smart Notifications</h2>
+                </div>
+
+                <div class="alerts-grid">
+                    <div class="glass-panel alert-card-item danger">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <div class="alert-card-body">
+                            <h4>Rain Alerts</h4>
+                            <p>Push alerts sent to your device 15 minutes before rainfall starts at your current location.</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel alert-card-item info">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <div class="alert-card-body">
+                            <h4>Forecast Digest</h4>
+                            <p>Receive clean weather insights and prediction digests in your inbox every morning.</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel alert-card-item nature">
+                        <i class="fa-solid fa-seedling"></i>
+                        <div class="alert-card-body">
+                            <h4>Agriculture Warnings</h4>
+                            <p>Special notices mapped to soil humidity thresholds and harvest timelines.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 7: AI INSIGHTS -->
+        <section class="scroll-section" id="insights-frame">
+            <div class="insights-layout">
+                <div class="glass-panel large-insights-container">
+                    <div class="section-header" style="margin-bottom: 1.5rem;">
+                        <div class="section-tag"><i class="fa-solid fa-brain"></i> Model Explanation</div>
+                        <h2>AI Intelligence Insights</h2>
+                    </div>
+                    
+                    <div class="insights-list">
+                        <div class="insight-row">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <p id="insightSummary">Rain is expected within the next 90 minutes. High probability system confirmed.</p>
+                        </div>
+                        <div class="insight-row">
+                            <i class="fa-solid fa-clock"></i>
+                            <p id="insightTimeline">Precipitation peaks late afternoon around 3:00 PM local time.</p>
+                        </div>
+                        <div class="insight-row">
+                            <i class="fa-solid fa-wind"></i>
+                            <p id="insightWind">Strong south-westerly winds may slightly disperse local rain intensity by evening.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Secondary Info block -->
+                <div class="glass-panel" style="padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem;">
+                    <h3>Live Diagnostic Metrics</h3>
+                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Feels Like</span>
+                            <span id="feelsLikeVal" style="font-weight: 600;">36°C</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Dew Point</span>
+                            <span id="dewPointVal" style="font-weight: 600;">21°C</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Visibility</span>
+                            <span id="visibilityVal" style="font-weight: 600;">10 km</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Cloud Cover</span>
+                            <span id="cloudCoverVal" style="font-weight: 600;">75%</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-muted);">Air Quality Index (AQI)</span>
+                            <span id="aqiVal" style="font-weight: 600;">38</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 8: FUTURE WEATHER VISION (CLOSING SEQUENCE) -->
+        <section class="scroll-section" id="vision-frame">
+            <div class="vision-text-block">
+                <h2>Nature-Tech Weather Intelligence</h2>
+                <p>Designed to align natural weather observations with state-of-the-art predictive algorithms. A quiet, minimal weather vision built to serve you naturally.</p>
+            </div>
+
+            <!-- Footer -->
+            <footer>
+                <div class="footer-links">
+                    <a href="#">About the AI Model</a>
+                    <a href="#">Open-Meteo Integration</a>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">API Documentation</a>
+                    <a href="#">GitHub Code</a>
+                </div>
+                <div class="footer-copyright">
+                    &copy; 2026 Rainova Weather. All rights reserved. Made by Piyush Agar. Powered by Random Forest classification models.
+                </div>
+            </footer>
+        </section>
+
+    </div>
+
+    <script>
+        const predictBtn = document.getElementById('predictBtn');
+        const locateBtn = document.getElementById('locateBtn');
+        const locationInput = document.getElementById('locationInput');
+        const loader = document.getElementById('loader');
+
+        // Weather Dashboard UI targets
+        const locationName = document.getElementById('locationName');
+        const coordinatesText = document.getElementById('coordinatesText');
+        const confidenceBadge = document.getElementById('confidenceBadge');
+        const currentTemp = document.getElementById('currentTemp');
+        const currentIcon = document.getElementById('currentIcon');
+        const currentCondition = document.getElementById('currentCondition');
+        const feelsLike = document.getElementById('feelsLike');
+        const humidity = document.getElementById('humidity');
+        const windSpeed = document.getElementById('windSpeed');
+        const uvIndex = document.getElementById('uvIndex');
+
+        // Floating widgets info
+        const fwProb = document.getElementById('fwProb');
+        const fwTemp = document.getElementById('fwTemp');
+        const fwWind = document.getElementById('fwWind');
+
+        // Dashboard widgets
+        const aqiVal = document.getElementById('aqiVal');
+        const feelsLikeVal = document.getElementById('feelsLikeVal');
+        const dewPointVal = document.getElementById('dewPointVal');
+        const pressureVal = document.getElementById('pressure');
+        const visibilityVal = document.getElementById('visibilityVal');
+        const cloudCoverVal = document.getElementById('cloudCoverVal');
+
+        // Insights widgets
+        const insightSummary = document.getElementById('insightSummary');
+        const insightTimeline = document.getElementById('insightTimeline');
+        const insightWind = document.getElementById('insightWind');
+        const precipEcho = document.getElementById('precipEcho');
+
+        const timelineContainer = document.getElementById('timelineContainer');
+        const floatingWidgets = document.getElementById('floatingWidgets');
+
+        // Chart.js Variables
+        let monthlyChartInstance = null;
+        let yearlyChartInstance = null;
+
+        // Trigger predict on Enter key
+        locationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performPrediction(locationInput.value);
+            }
+        });
+
+        predictBtn.addEventListener('click', () => {
+            performPrediction(locationInput.value);
+        });
+
+        locateBtn.addEventListener('click', () => {
+            loader.style.display = 'flex';
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        performPrediction(`${lat},${lon}`);
+                    },
+                    (error) => {
+                        // Geolocation failed (e.g., blocked permission). Fallback to IP Geolocation.
+                        fallbackToIpGeolocation();
+                    },
+                    {
+                        enableHighAccuracy: false,
+                        timeout: 6000,
+                        maximumAge: 60000
+                    }
+                );
+            } else {
+                fallbackToIpGeolocation();
+            }
+        });
+
+        function fallbackToIpGeolocation() {
+            // 1. Try ipapi.co
+            fetch('https://ipapi.co/json/')
+                .then(res => {
+                    if (!res.ok) throw new Error("ipapi.co failed");
+                    return res.json();
+                })
+                .then(ipData => {
+                    if (ipData.latitude && ipData.longitude) {
+                        performPrediction(`${ipData.latitude},${ipData.longitude}`);
+                    } else {
+                        throw new Error("Invalid ipapi.co coordinates");
+                    }
+                })
+                .catch(err => {
+                    console.warn("ipapi.co failed, trying ipinfo.io...", err);
+                    // 2. Try ipinfo.io
+                    fetch('https://ipinfo.io/json')
+                        .then(res => {
+                            if (!res.ok) throw new Error("ipinfo.io failed");
+                            return res.json();
+                        })
+                        .then(ipData => {
+                            if (ipData.loc) {
+                                performPrediction(ipData.loc);
+                            } else {
+                                throw new Error("Invalid ipinfo.io response");
+                            }
+                        })
+                        .catch(err2 => {
+                            console.warn("ipinfo.io failed, trying ip-api.com...", err2);
+                            // 3. Try ip-api.com (failsafe HTTP request)
+                            fetch('http://ip-api.com/json/')
+                                .then(res => {
+                                    if (!res.ok) throw new Error("ip-api.com failed");
+                                    return res.json();
+                                })
+                                .then(ipData => {
+                                    if (ipData.lat && ipData.lon) {
+                                        performPrediction(`${ipData.lat},${ipData.lon}`);
+                                    } else {
+                                        throw new Error("Invalid ip-api.com response");
+                                    }
+                                })
+                                .catch(err3 => {
+                                    loader.style.display = 'none';
+                                    alert("Could not detect your location automatically. Please search for your city using the search bar.");
+                                });
+                        });
+                });
+        }
+
+        function performPrediction(locationValue) {
+            if (!locationValue.trim()) {
+                alert("Please enter a location.");
+                return;
+            }
+
+            loader.style.display = 'flex';
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ location: locationValue })
+            })
+            .then(res => res.json())
+            .then(data => {
+                loader.style.display = 'none';
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                // Update text fields
+                locationName.textContent = data.location.split(',')[0] + (data.location.split(',')[1] ? ', ' + data.location.split(',')[1].trim() : '');
+                coordinatesText.textContent = `Lat: ${data.latitude.toFixed(4)}, Lon: ${data.longitude.toFixed(4)}`;
+                confidenceBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> AI Confidence: ${data.ai_confidence_score}%`;
+
+                // Update Geotech Location elements
+                const elevationText = document.getElementById('elevationText');
+                const timezoneText = document.getElementById('timezoneText');
+                if (elevationText && timezoneText) {
+                    elevationText.innerHTML = `<i class="fa-solid fa-mountain"></i> Elev: ${data.elevation}m`;
+                    timezoneText.innerHTML = `<i class="fa-solid fa-earth-americas"></i> Zone: ${data.timezone}`;
+                }
+                
+                currentTemp.textContent = data.current_temp;
+                feelsLike.textContent = data.feels_like;
+                humidity.textContent = `${data.current_humidity}%`;
+                windSpeed.textContent = `${data.current_wind_speed} km/h`;
+                uvIndex.textContent = `${data.current_uv_index} / 10`;
+
+                // Update Big Rain Prediction Display
+                const largeRainProb = document.getElementById('largeRainProb');
+                const largeRainPred = document.getElementById('largeRainPred');
+                if (largeRainProb && largeRainPred) {
+                    largeRainProb.textContent = `${data.rain_tomorrow_probability}%`;
+                    largeRainPred.textContent = data.rain_tomorrow_prediction === 'Yes' ? 'Rain Tomorrow' : 'No Rain';
+                    largeRainProb.style.color = data.rain_tomorrow_prediction === 'Yes' ? 'var(--sky-blue)' : 'var(--forest-green)';
+                    largeRainPred.style.color = data.rain_tomorrow_prediction === 'Yes' ? 'var(--sky-blue)' : 'var(--forest-green)';
+                }
+
+                // Sub-widgets
+                aqiVal.textContent = data.us_aqi;
+                feelsLikeVal.textContent = `${data.feels_like}°C`;
+                dewPointVal.textContent = `${data.dew_point}°C`;
+                pressureVal.textContent = `${data.current_pressure} hPa`;
+                visibilityVal.textContent = `${data.current_visibility} km`;
+                cloudCoverVal.textContent = `${data.current_cloud_cover}%`;
+
+                // Floating widgets updates
+                fwProb.textContent = `${data.rain_tomorrow_probability}%`;
+                fwTemp.textContent = `${data.current_temp}°C`;
+                fwWind.textContent = `${data.current_wind_speed} km/h`;
+
+                // Radar precip echo text
+                precipEcho.textContent = data.rainfall_today > 5 ? "Strong" : (data.rainfall_today > 0.5 ? "Moderate" : "None");
+
+                // Icon configuration
+                let currentIconClass = "fa-cloud-sun";
+                switch(data.current_icon) {
+                    case 'sun': currentIconClass = 'fa-sun'; break;
+                    case 'cloud-sun': currentIconClass = 'fa-cloud-sun'; break;
+                    case 'smog': currentIconClass = 'fa-smog'; break;
+                    case 'cloud-rain': currentIconClass = 'fa-cloud-rain'; break;
+                    case 'cloud-showers-heavy': currentIconClass = 'fa-cloud-showers-heavy'; break;
+                    case 'snowflake': currentIconClass = 'fa-snowflake'; break;
+                    case 'cloud-bolt': currentIconClass = 'fa-cloud-bolt'; break;
+                }
+                currentIcon.className = `fa-solid ${currentIconClass}`;
+                currentCondition.textContent = data.rain_tomorrow_prediction === 'Yes' ? "Rain Looming" : "Fair Skies";
+
+                // Update background gradient & particles state based on weather code
+                updateTheme(data.current_icon);
+
+                // Insights updates
+                insightSummary.textContent = data.ai_insights.summary;
+                insightTimeline.textContent = data.ai_insights.timeline_summary;
+                insightWind.textContent = data.ai_insights.wind_factor;
+
+                // Render Timeline Cards
+                timelineContainer.innerHTML = '';
+                data.hourly_forecast.forEach(item => {
+                    let cardIconClass = "fa-cloud-sun";
+                    switch(item.icon) {
+                        case 'sun': cardIconClass = 'fa-sun'; break;
+                        case 'cloud-sun': cardIconClass = 'fa-cloud-sun'; break;
+                        case 'smog': cardIconClass = 'fa-smog'; break;
+                        case 'cloud-rain': cardIconClass = 'fa-cloud-rain'; break;
+                        case 'cloud-showers-heavy': cardIconClass = 'fa-cloud-showers-heavy'; break;
+                        case 'snowflake': cardIconClass = 'fa-snowflake'; break;
+                        case 'cloud-bolt': cardIconClass = 'fa-cloud-bolt'; break;
+                    }
+
+                    const probClass = item.rain_prob > 50 ? 'prob-high' : 'prob-low';
+                    const card = `
+                        <div class="glass-panel timeline-card">
+                            <span class="timeline-time">${item.time}</span>
+                            <i class="fa-solid ${cardIconClass}"></i>
+                            <span class="timeline-temp">${item.temp}°C</span>
+                            <span class="timeline-prob ${probClass}"><i class="fa-solid fa-droplet"></i> ${item.rain_prob}%</span>
+                        </div>
+                    `;
+                    timelineContainer.innerHTML += card;
+                });
+
+                // Update charts
+                renderCharts(data.historical_data);
+            })
+            .catch(err => {
+                loader.style.display = 'none';
+                alert("Geocoding or weather lookup failed.");
+                console.error(err);
+            });
+        }
+
+        // Sky Weather Theme Handler
+        let currentRainDensity = 0;
+        let currentNightMode = true;
+
+        function updateTheme(condition) {
+            const atmosphere = document.getElementById('bgAtmosphere');
+            currentNightMode = false;
+            const landscapeFrame = document.getElementById('landscapeFrame');
+            const landscapeImg = landscapeFrame ? landscapeFrame.querySelector('img') : null;
+            const landscapeLabel = document.getElementById('landscapeLabel');
+            
+            if (condition === 'sun') {
+                if (atmosphere) atmosphere.style.background = 'var(--sky-sunny)';
+                currentRainDensity = 0;
+                if (landscapeImg) {
+                    landscapeImg.style.filter = 'brightness(1.15) saturate(1.1)';
+                    landscapeLabel.textContent = 'Sunny Skies';
+                }
+            } else if (condition === 'cloud-sun') {
+                if (atmosphere) atmosphere.style.background = 'var(--sky-cloudy)';
+                currentRainDensity = 0;
+                if (landscapeImg) {
+                    landscapeImg.style.filter = 'grayscale(0.35) brightness(0.9)';
+                    landscapeLabel.textContent = 'Overcast';
+                }
+            } else if (condition === 'cloud-rain') {
+                if (atmosphere) atmosphere.style.background = 'var(--sky-rain)';
+                currentRainDensity = 2.5; // Moderate rain
+                if (landscapeImg) {
+                    landscapeImg.style.filter = 'saturate(0.8) contrast(1.1) brightness(0.95)';
+                    landscapeLabel.textContent = 'Rain Shower';
+                }
+            } else if (condition === 'cloud-showers-heavy' || condition === 'cloud-bolt') {
+                if (atmosphere) atmosphere.style.background = 'var(--sky-storm)';
+                currentRainDensity = 5.5; // Heavy storm rain
+                if (landscapeImg) {
+                    landscapeImg.style.filter = 'saturate(0.5) contrast(1.2) brightness(0.8)';
+                    landscapeLabel.textContent = 'Thunderstorm';
+                }
+            } else {
+                if (atmosphere) atmosphere.style.background = 'var(--sky-night)';
+                currentRainDensity = 0;
+                currentNightMode = true;
+                if (landscapeImg) {
+                    landscapeImg.style.filter = 'brightness(0.35) saturate(0.55) hue-rotate(40deg)';
+                    landscapeLabel.textContent = 'Night View';
+                }
+            }
+        }
+
+        // Chart Renderer using Chart.js
+        function renderCharts(histData) {
+            const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
+            const ctxYearly = document.getElementById('yearlyChart').getContext('2d');
+
+            if (monthlyChartInstance) monthlyChartInstance.destroy();
+            if (yearlyChartInstance) yearlyChartInstance.destroy();
+
+            // Monthly Rainfall Chart
+            monthlyChartInstance = new Chart(ctxMonthly, {
+                type: 'line',
+                data: {
+                    labels: histData.months,
+                    datasets: [{
+                        label: 'Rainfall (mm)',
+                        data: histData.monthly_rainfall,
+                        borderColor: '#5BB6F9',
+                        backgroundColor: 'rgba(91, 182, 249, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#DCE5EC' } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#DCE5EC' } }
+                    }
+                }
+            });
+
+            // Yearly Rainfall Chart
+            yearlyChartInstance = new Chart(ctxYearly, {
+                type: 'bar',
+                data: {
+                    labels: histData.yearly_comparison.years,
+                    datasets: [{
+                        label: 'Total Rainfall',
+                        data: histData.yearly_comparison.rainfall,
+                        backgroundColor: 'rgba(91, 182, 249, 0.65)',
+                        hoverBackgroundColor: '#5BB6F9',
+                        borderRadius: 8,
+                        barThickness: 24
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#DCE5EC' } },
+                        y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#DCE5EC' } }
+                    }
+                }
+            });
+        }
+
+        // --- BACKGROUND ATMOSPHERIC PARTICLES CANVAS SYSTEM ---
+        const particleCanvas = document.getElementById('particleCanvas');
+        const pCtx = particleCanvas.getContext('2d');
+
+        let particles = [];
+
+        function resizeCanvas() {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * particleCanvas.width;
+                this.y = Math.random() * particleCanvas.height - 100;
+                this.length = Math.random() * 20 + 10;
+                this.speed = Math.random() * 8 + 12;
+                this.alpha = Math.random() * 0.4 + 0.1;
+                this.size = Math.random() * 1.5 + 0.5; // Star size
+            }
+
+            drawRain() {
+                pCtx.beginPath();
+                pCtx.strokeStyle = `rgba(186, 230, 253, ${this.alpha})`;
+                pCtx.lineWidth = 1;
+                pCtx.moveTo(this.x, this.y);
+                pCtx.lineTo(this.x - 2, this.y + this.length);
+                pCtx.stroke();
+            }
+
+            drawStar() {
+                pCtx.beginPath();
+                pCtx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                pCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                pCtx.fill();
+            }
+
+            updateRain() {
+                this.y += this.speed;
+                this.x -= 2; // Angle fall
+                if (this.y > particleCanvas.height) {
+                    this.reset();
+                }
+            }
+
+            updateStar() {
+                // Twinkle effect
+                this.alpha += (Math.random() * 0.04 - 0.02);
+                if (this.alpha < 0) this.alpha = 0.1;
+                if (this.alpha > 0.6) this.alpha = 0.5;
+            }
+        }
+
+        // Initialize particles
+        for (let i = 0; i < 200; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateParticles() {
+            pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            particles.forEach(p => {
+                if (currentRainDensity > 0) {
+                    p.drawRain();
+                    p.updateRain();
+                } else if (currentNightMode) {
+                    p.drawStar();
+                    p.updateStar();
+                }
+            });
+            
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        // --- LAYER 1: ATMOSPHERIC ENGINE POSITIONING VARIABLES ---
+        let globeAngle = 0;
+        let isDragging = false;
+        let lastX = 0;
+
+        // Custom image properties dynamically adjusted by scroll
+        let globeRadius = 170;
+        let globeXPercent = 75; // percentage of viewport width
+        let globeYPercent = 50; // percentage of viewport height
+        let globeOpacity = 1;
+
+        // --- LAYER 4: RADAR CANVAS SYSTEM ---
+        const radarCanvas = document.getElementById('radarCanvas');
+        const rCtx = radarCanvas.getContext('2d');
+        const radarSlider = document.getElementById('radarSlider');
+        const radarHandle = document.getElementById('radarHandle');
+        const radarTimeLabel = document.getElementById('radarTimeLabel');
+        const radarPlayBtn = document.getElementById('radarPlayBtn');
+
+        let radarAngle = 0;
+        let radarTimeOffset = 0;
+        let isRadarPlaying = true;
+
+        function resizeRadar() {
+            radarCanvas.width = radarCanvas.parentElement.clientWidth;
+            radarCanvas.height = radarCanvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeRadar);
+        resizeRadar();
+
+        radarPlayBtn.addEventListener('click', () => {
+            isRadarPlaying = !isRadarPlaying;
+            radarPlayBtn.innerHTML = isRadarPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+        });
+
+        radarSlider.addEventListener('click', (e) => {
+            const rect = radarSlider.getBoundingClientRect();
+            const pct = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+            radarTimeOffset = pct * 100;
+            radarHandle.style.left = `${radarTimeOffset}%`;
+            updateRadarLabel(pct);
+        });
+
+        function updateRadarLabel(pct) {
+            const minsAgo = Math.round((1 - pct) * 60);
+            radarTimeLabel.textContent = minsAgo === 0 ? "Live" : `-${minsAgo} min`;
+        }
+
+        function drawRadar() {
+            const w = radarCanvas.width;
+            const h = radarCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const rMax = Math.min(w, h) * 0.45;
+
+            rCtx.fillStyle = '#0b111e';
+            rCtx.fillRect(0, 0, w, h);
+
+            // Radar grids
+            rCtx.strokeStyle = 'rgba(91, 182, 249, 0.08)';
+            rCtx.lineWidth = 1;
+            for (let r = rMax / 3; r <= rMax; r += rMax / 3) {
+                rCtx.beginPath();
+                rCtx.arc(cx, cy, r, 0, Math.PI * 2);
+                rCtx.stroke();
+            }
+
+            // Cross lines
+            rCtx.beginPath();
+            rCtx.moveTo(cx - rMax, cy); rCtx.lineTo(cx + rMax, cy);
+            rCtx.moveTo(cx, cy - rMax); rCtx.lineTo(cx, cy + rMax);
+            rCtx.stroke();
+
+            // Sweep line
+            const endX = cx + Math.cos(radarAngle) * rMax;
+            const endY = cy + Math.sin(radarAngle) * rMax;
+            
+            const sweepGrad = rCtx.createLinearGradient(cx, cy, endX, endY);
+            sweepGrad.addColorStop(0, 'rgba(91, 182, 249, 0.35)');
+            sweepGrad.addColorStop(1, 'rgba(91, 182, 249, 0)');
+            
+            rCtx.beginPath();
+            rCtx.moveTo(cx, cy);
+            rCtx.arc(cx, cy, rMax, radarAngle, radarAngle + 0.3);
+            rCtx.closePath();
+            rCtx.fillStyle = sweepGrad;
+            rCtx.fill();
+
+            // Green storm echoes
+            rCtx.fillStyle = 'rgba(58, 167, 109, 0.45)';
+            const echoes = [
+                [cx - 40, cy - 80, 30],
+                [cx + 80, cy + 40, 45],
+                [cx - 100, cy + 90, 25]
+            ];
+
+            echoes.forEach(([ex, ey, er]) => {
+                const pulse = Math.sin(Date.now() * 0.002 + er) * 5;
+                rCtx.beginPath();
+                rCtx.arc(ex + Math.sin(radarAngle * 0.5) * 10, ey, er + pulse, 0, Math.PI * 2);
+                rCtx.fill();
+            });
+
+            if (isRadarPlaying) {
+                radarAngle += 0.015;
+                radarTimeOffset = (radarTimeOffset + 0.1) % 100;
+                radarHandle.style.left = `${radarTimeOffset}%`;
+                updateRadarLabel(radarTimeOffset / 100);
+            }
+
+            requestAnimationFrame(drawRadar);
+        }
+        drawRadar();
+
+        // --- SCROLL-DRIVEN CAMERA MOTION & TRANSITIONS ---
+        // Setup scroll frame activation triggers
+        const sections = document.querySelectorAll('.scroll-section');
+
+        function triggerScrollReveal() {
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            sections.forEach((section, index) => {
+                const rect = section.getBoundingClientRect();
+                
+                // If section is in viewport
+                if (rect.top < windowHeight * 0.75 && rect.bottom > windowHeight * 0.25) {
+                    section.classList.add('active-frame');
+                } else {
+                    section.classList.remove('active-frame');
+                }
+            });
+
+            // Calculate overall scroll percent
+            const totalScrollHeight = document.documentElement.scrollHeight - windowHeight;
+            const scrollPct = scrollY / totalScrollHeight;
+
+            // DYNAMIC GLOBE CAMERA / POSITION INTERPOLATION (Apple Weather product tour style)
+            if (scrollPct < 0.12) {
+                // Section 1: Hero
+                globeXPercent = 75;
+                globeYPercent = 50;
+                globeRadius = 170;
+                globeOpacity = 1;
+                floatingWidgets.style.opacity = 1;
+            } else if (scrollPct >= 0.12 && scrollPct < 0.3) {
+                // Section 2: Live Weather - shift slightly to the center-right
+                globeXPercent = 75 + (scrollPct - 0.12) * 50; // shift out
+                globeYPercent = 50;
+                globeRadius = 170;
+                globeOpacity = 1;
+                floatingWidgets.style.opacity = 1 - (scrollPct - 0.12) * 5; // fade out floating widgets
+            } else if (scrollPct >= 0.3 && scrollPct < 0.45) {
+                // Section 3: AI Timeline - shrink and sit at top right
+                globeXPercent = 85;
+                globeYPercent = 25;
+                globeRadius = 100;
+                globeOpacity = 0.8;
+                floatingWidgets.style.opacity = 0;
+            } else if (scrollPct >= 0.45 && scrollPct < 0.65) {
+                // Section 4: Satellite Layer - pull to center, grow massive
+                globeXPercent = 32; // Over the radar box left side
+                globeYPercent = 50;
+                globeRadius = 210;
+                globeOpacity = 0.9;
+                floatingWidgets.style.opacity = 0;
+            } else {
+                // Section 5+ : Fade globe out completely
+                globeOpacity = Math.max(0, 1 - (scrollPct - 0.65) * 6);
+                floatingWidgets.style.opacity = 0;
+            }
+
+            // Apply style values to Globe Canvas position
+            globeCanvas.style.left = `${globeXPercent}%`;
+            globeCanvas.style.top = `${globeYPercent}%`;
+            globeCanvas.style.opacity = globeOpacity;
+            globeCanvas.style.width = `${globeRadius * 2.8}px`;
+        }
+
+        window.addEventListener('scroll', triggerScrollReveal);
+        triggerScrollReveal(); // Trigger once on load
+
+        // Default setup when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            performPrediction('Nagpur');
+        });
+    </script>
+</body>
+</html>
